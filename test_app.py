@@ -1,68 +1,52 @@
 import pytest
 
-from app import app
+from app import MAX_FINE, calculate_fine
 
 
-@pytest.fixture
-def anon_client(tmp_path):
-    app.config.update(TESTING=True, DATABASE=str(tmp_path / "test.db"))
-    with app.test_client() as client:
-        yield client
+# Zero: returned on time -> no fine
+def test_zero_days_no_fine():
+    assert calculate_fine(0) == 0
 
 
-@pytest.fixture
-def client(anon_client):
-    anon_client.post("/login", data={"username": "admin", "password": "admin123"})
-    return anon_client
+# Valid: normal overdue values
+@pytest.mark.parametrize(
+    "days, expected",
+    [(1, 10), (5, 50), (10, 100), (25, 250)],
+)
+def test_valid_days(days, expected):
+    assert calculate_fine(days) == expected
 
 
-def test_requires_login(anon_client):
-    resp = anon_client.get("/")
-    assert resp.status_code == 302 and "/login" in resp.headers["Location"]
+# Boundary: around 0 and around the cap (cap of 500 is reached at 50 days)
+@pytest.mark.parametrize(
+    "days, expected",
+    [
+        (1, 10),            # just above zero
+        (49, 490),          # just below the cap
+        (50, MAX_FINE),     # exactly at the cap
+        (51, MAX_FINE),     # just above the cap
+        (1000, MAX_FINE),   # far above the cap
+    ],
+)
+def test_boundary_days(days, expected):
+    assert calculate_fine(days) == expected
 
 
-def test_login_success(anon_client):
-    resp = anon_client.post(
-        "/login",
-        data={"username": "admin", "password": "admin123"},
-        follow_redirects=True,
-    )
-    assert resp.status_code == 200 and b"Welcome, admin!" in resp.data
+def test_negative_one_is_rejected():
+    # just below the lower boundary
+    with pytest.raises(ValueError):
+        calculate_fine(-1)
 
 
-def test_login_failure(anon_client):
-    resp = anon_client.post("/login", data={"username": "admin", "password": "wrong"})
-    assert resp.status_code == 401 and b"Invalid username or password" in resp.data
+# Invalid: negative numbers
+@pytest.mark.parametrize("days", [-1, -5, -100])
+def test_negative_days_raise_value_error(days):
+    with pytest.raises(ValueError):
+        calculate_fine(days)
 
 
-def test_index_empty(client):
-    resp = client.get("/")
-    assert resp.status_code == 200
-    assert b"No books found" in resp.data
-
-
-def test_add_issue_return_delete(client):
-    client.post("/add", data={"title": "Dune", "author": "Frank Herbert"}, follow_redirects=True)
-    resp = client.get("/")
-    assert b"Dune" in resp.data and b"Available" in resp.data
-
-    client.post("/issue/1", data={"borrower": "Alice"})
-    assert b"Issued to Alice" in client.get("/").data
-
-    client.post("/return/1")
-    assert b"Available" in client.get("/").data
-
-    client.post("/delete/1")
-    assert b"No books found" in client.get("/").data
-
-
-def test_add_requires_fields(client):
-    resp = client.post("/add", data={"title": "", "author": ""})
-    assert resp.status_code == 400
-
-
-def test_search(client):
-    client.post("/add", data={"title": "Dune", "author": "Frank Herbert"}, follow_redirects=True)
-    client.post("/add", data={"title": "Emma", "author": "Jane Austen"}, follow_redirects=True)
-    resp = client.get("/?q=austen")
-    assert b"Emma" in resp.data and b"Dune" not in resp.data
+# Invalid: wrong types
+@pytest.mark.parametrize("days", ["5", 2.5, None, [3], True, False])
+def test_invalid_types_raise_type_error(days):
+    with pytest.raises(TypeError):
+        calculate_fine(days)

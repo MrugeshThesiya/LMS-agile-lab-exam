@@ -10,6 +10,22 @@ app.config["DATABASE"] = os.environ.get("DATABASE", "library.db")
 app.config["ADMIN_USERNAME"] = os.environ.get("ADMIN_USERNAME", "admin")
 app.config["ADMIN_PASSWORD"] = os.environ.get("ADMIN_PASSWORD", "admin123")
 
+FINE_PER_DAY = 10
+MAX_FINE = 500
+
+
+def calculate_fine(overdue_days):
+    """Return the fine for a book returned `overdue_days` late.
+
+    10 per overdue day, capped at 500. 0 days means no fine.
+    Raises TypeError for non-integers and ValueError for negative days.
+    """
+    if isinstance(overdue_days, bool) or not isinstance(overdue_days, int):
+        raise TypeError("overdue_days must be an integer")
+    if overdue_days < 0:
+        raise ValueError("overdue_days cannot be negative")
+    return min(overdue_days * FINE_PER_DAY, MAX_FINE)
+
 
 def login_required(view):
     @wraps(view)
