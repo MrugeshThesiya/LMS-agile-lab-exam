@@ -1,11 +1,24 @@
 import os
 import sqlite3
+from functools import wraps
 
-from flask import Flask, g, redirect, render_template, request, url_for, flash
+from flask import Flask, g, redirect, render_template, request, session, url_for, flash
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "dev-secret-key")
 app.config["DATABASE"] = os.environ.get("DATABASE", "library.db")
+app.config["ADMIN_USERNAME"] = os.environ.get("ADMIN_USERNAME", "admin")
+app.config["ADMIN_PASSWORD"] = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+
+def login_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if not session.get("user"):
+            return redirect(url_for("login"))
+        return view(*args, **kwargs)
+
+    return wrapped
 
 
 def get_db():
@@ -43,7 +56,32 @@ def ensure_db():
     init_db()
 
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if (
+            username == app.config["ADMIN_USERNAME"]
+            and password == app.config["ADMIN_PASSWORD"]
+        ):
+            session["user"] = username
+            flash(f"Welcome, {username}!")
+            return redirect(url_for("index"))
+        error = "Invalid username or password."
+    return render_template("login.html", error=error), (401 if error else 200)
+
+
+@app.route("/logout")
+def logout():
+    session.pop("user", None)
+    flash("Logged out.")
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
     query = request.args.get("q", "").strip()
     db = get_db()
@@ -59,6 +97,7 @@ def index():
 
 
 @app.route("/add", methods=["GET", "POST"])
+@login_required
 def add_book():
     if request.method == "POST":
         title = request.form.get("title", "").strip()
@@ -75,6 +114,7 @@ def add_book():
 
 
 @app.route("/issue/<int:book_id>", methods=["POST"])
+@login_required
 def issue_book(book_id):
     borrower = request.form.get("borrower", "").strip()
     if not borrower:
@@ -91,6 +131,7 @@ def issue_book(book_id):
 
 
 @app.route("/return/<int:book_id>", methods=["POST"])
+@login_required
 def return_book(book_id):
     db = get_db()
     cur = db.execute(
@@ -103,6 +144,7 @@ def return_book(book_id):
 
 
 @app.route("/delete/<int:book_id>", methods=["POST"])
+@login_required
 def delete_book(book_id):
     db = get_db()
     db.execute("DELETE FROM books WHERE id = ?", (book_id,))

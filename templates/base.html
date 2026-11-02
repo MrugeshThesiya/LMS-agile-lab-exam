@@ -11,12 +11,15 @@
     form.inline { display: inline; }
     .flash { background: #eef6ff; border: 1px solid #9cc4ff; padding: .5rem; margin: .5rem 0; }
     nav a { margin-right: 1rem; }
+    .error { background: #ffecec; border: 1px solid #f5aca6; padding: .5rem; margin: .5rem 0; }
   </style>
 </head>
 <body>
   <h1>Library Management System</h1>
-  <nav><a href="{{ url_for('index') }}">Books</a><a href="{{ url_for('add_book') }}">Add Book</a></nav>
-  {% for msg in get_flashed_messages() %}<div class="flash">{{ msg }}</div>{% endfor %}
+  {% if session.get('user') %}
+  <nav id="nav"><a href="{{ url_for('index') }}">Books</a><a href="{{ url_for('add_book') }}">Add Book</a><a id="logout" href="{{ url_for('logout') }}">Logout ({{ session['user'] }})</a></nav>
+  {% endif %}
+  {% for msg in get_flashed_messages() %}<div class="flash" id="flash">{{ msg }}</div>{% endfor %}
   {% block content %}{% endblock %}
 </body>
 </html>

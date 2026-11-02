@@ -4,10 +4,35 @@ from app import app
 
 
 @pytest.fixture
-def client(tmp_path):
+def anon_client(tmp_path):
     app.config.update(TESTING=True, DATABASE=str(tmp_path / "test.db"))
     with app.test_client() as client:
         yield client
+
+
+@pytest.fixture
+def client(anon_client):
+    anon_client.post("/login", data={"username": "admin", "password": "admin123"})
+    return anon_client
+
+
+def test_requires_login(anon_client):
+    resp = anon_client.get("/")
+    assert resp.status_code == 302 and "/login" in resp.headers["Location"]
+
+
+def test_login_success(anon_client):
+    resp = anon_client.post(
+        "/login",
+        data={"username": "admin", "password": "admin123"},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200 and b"Welcome, admin!" in resp.data
+
+
+def test_login_failure(anon_client):
+    resp = anon_client.post("/login", data={"username": "admin", "password": "wrong"})
+    assert resp.status_code == 401 and b"Invalid username or password" in resp.data
 
 
 def test_index_empty(client):
