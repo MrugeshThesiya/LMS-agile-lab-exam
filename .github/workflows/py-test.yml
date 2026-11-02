@@ -1,0 +1,15 @@
+name: LMS CI
+
+on:
+    push:
+
+jobs:
+    test:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout Code
+              uses: actions/checkout@v4
+
+            - name: install dependencies
+              uses: actions/setup-python@v5
