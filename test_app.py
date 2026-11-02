@@ -50,3 +50,5 @@ def test_negative_days_raise_value_error(days):
 def test_invalid_types_raise_type_error(days):
     with pytest.raises(TypeError):
         calculate_fine(days)
+
+# Test change to show merging of branch
